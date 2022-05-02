@@ -266,6 +266,13 @@ inline size_t roundToPowerOfTwo(size_t value) {
         return std::sqrt(std::max(0.0, value));
     }
 
+    inline Float sqr(Float v) { return v * v; }
+
+    inline float trigInverse(float x)
+    {
+        return std::min(std::sqrt(std::max(1.0f - x*x, 0.0f)), 1.0f);
+    }
+
     /// Simple signum function -- note that it returns the FP sign of the input (and never zero)
     inline Float signum(Float value) {
         #if defined(__WINDOWS__)
