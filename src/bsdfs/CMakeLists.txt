@@ -80,3 +80,7 @@ set_target_properties(yanfurrt PROPERTIES FOLDER "plugins")
 add_library(irawan irawan.cpp)
 target_link_libraries(irawan mitsuba-python)
 set_target_properties(irawan PROPERTIES FOLDER "plugins")
+
+add_library(kajiyakay SHARED kajiyakay.cpp)
+target_link_libraries(kajiyakay mitsuba-python)
+set_target_properties(kajiyakay PROPERTIES FOLDER "plugins")
