@@ -65,10 +65,7 @@ public:
               sAvg = m_specularReflectance->getAverage().getLuminance();
         m_specularSamplingWeight = sAvg / (dAvg + sAvg);
 
-        m_usesRayDifferentials =
-            m_diffuseReflectance->usesRayDifferentials() ||
-            m_specularReflectance->usesRayDifferentials() ||
-            m_exponent->usesRayDifferentials();
+		m_usesRayDifferentials = false;
 
         BSDF::configure();
     }

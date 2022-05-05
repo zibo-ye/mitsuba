@@ -20,9 +20,7 @@ add_library(difftrans SHARED difftrans.cpp)
 add_library(hk SHARED hk.cpp)
 add_library(null SHARED null.cpp)
 add_library(thindielectric SHARED ior.h thindielectric.cpp)
-add_library(marschnerhair SHARED marschnerhair.cpp)
-add_library(yanfur SHARED yanfur.cpp)
-add_library(yanfurrt SHARED yanfurrt.cpp)
+
 
 # add_library(fur2 SHARED helpers.h fur2_basics.h fur2.cpp)
 target_link_libraries(diffuse mitsuba-python)
@@ -47,9 +45,7 @@ target_link_libraries(difftrans mitsuba-python)
 target_link_libraries(hk mitsuba-python)
 target_link_libraries(null mitsuba-python)
 target_link_libraries(thindielectric mitsuba-python)
-target_link_libraries(marschnerhair mitsuba-python)
-target_link_libraries(yanfur mitsuba-python)
-target_link_libraries(yanfurrt mitsuba-python)
+
 
 set_target_properties(diffuse PROPERTIES FOLDER "plugins")
 set_target_properties(dielectric PROPERTIES FOLDER "plugins")
@@ -73,9 +69,7 @@ set_target_properties(difftrans PROPERTIES FOLDER "plugins")
 set_target_properties(hk PROPERTIES FOLDER "plugins")
 set_target_properties(null PROPERTIES FOLDER "plugins")
 set_target_properties(thindielectric PROPERTIES FOLDER "plugins")
-set_target_properties(marschnerhair PROPERTIES FOLDER "plugins")
-set_target_properties(yanfur PROPERTIES FOLDER "plugins")
-set_target_properties(yanfurrt PROPERTIES FOLDER "plugins")
+
 
 add_library(irawan irawan.cpp)
 target_link_libraries(irawan mitsuba-python)
@@ -84,3 +78,19 @@ set_target_properties(irawan PROPERTIES FOLDER "plugins")
 add_library(kajiyakay SHARED kajiyakay.cpp)
 target_link_libraries(kajiyakay mitsuba-python)
 set_target_properties(kajiyakay PROPERTIES FOLDER "plugins")
+
+add_library(marschnerhair SHARED marschnerhair.cpp)
+target_link_libraries(marschnerhair mitsuba-python)
+set_target_properties(marschnerhair PROPERTIES FOLDER "plugins")
+
+add_library(yanfur SHARED yanfur.cpp)
+target_link_libraries(yanfur mitsuba-python)
+set_target_properties(yanfur PROPERTIES FOLDER "plugins")
+
+add_library(yanfurrt SHARED yanfurrt.cpp)
+target_link_libraries(yanfurrt mitsuba-python)
+set_target_properties(yanfurrt PROPERTIES FOLDER "plugins")
+
+add_library(marschnerhair2 SHARED marschnerhair2.cpp)
+target_link_libraries(marschnerhair2 mitsuba-python)
+set_target_properties(marschnerhair2 PROPERTIES FOLDER "plugins")
