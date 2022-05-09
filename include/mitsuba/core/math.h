@@ -268,7 +268,7 @@ inline size_t roundToPowerOfTwo(size_t value) {
 
     inline Float sqr(Float v) { return v * v; }
 
-    inline float trigInverse(float x)
+    inline Float trigInverse(Float x)
     {
         return std::min(std::sqrt(std::max(1.0f - x*x, 0.0f)), 1.0f);
     }

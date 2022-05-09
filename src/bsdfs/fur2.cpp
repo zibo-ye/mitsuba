@@ -21,7 +21,6 @@
 #include <mitsuba/hw/basicshader.h>
 #include <mitsuba/core/warp.h>
 #include "fur2_basics.h"
-#include "helpers.h"
 #include "mitsuba/render/scene.h"
 #include <vector>
 #include <map>
@@ -107,7 +106,7 @@ public:
         colorTexture = ensureEnergyConservation(colorTexture, "color", 1.0f);
 
         m_components.clear();
-        m_components.push_back(EFUR2);
+        //m_components.push_back(EFUR2);
         if (colorTexture->getMaximum().max() > 0)
             m_components.push_back(EDiffuseReflection | EFrontSide
                 | (colorTexture->isConstant() ? 0 : ESpatiallyVarying));

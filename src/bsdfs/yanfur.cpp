@@ -71,9 +71,11 @@ public:
         _beta_n[1] = m_beta_n * std::sqrt(2.0);
         _beta_n[2] = m_beta_n * std::sqrt(3.0);
 
+        cout << toString() <<endl;
+
         precomputeAzimuthalDistributions();
 
-        _ms = new PrecomputedScatterLobe("data/fur/medulla_longitudinal.bin");
+        _ms = new PrecomputedScatterLobe("D:\\Projects\\hair\\fur2_code\\scatteringProfiles\\medulla_longitudinal.bin");
 
         //sample_profile();
 
@@ -203,7 +205,7 @@ public:
         }
         fclose(fp);   
 
-        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("data/fur/medulla_azimuthal.bin");
+        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("D:\\Projects\\hair\\fur2_code\\scatteringProfiles\\medulla_azimuthal.bin");
         int step = 256;
         Float stepInterval = 1.0f/step;
         FILE* fp2 = fopen("profile_CN.ppm", "wb");
@@ -282,9 +284,18 @@ public:
 
     std::string toString() const {
         std::ostringstream oss;
-        oss << "Marschner Hair[" << endl
+        oss << "yanfur[" << endl
             << "  id = \"" << getID() << "\"," << endl
-            << "  sigma = \"" << m_sigma_ca.toString() << "\"," << endl
+			<< "  kappa = \"" << m_kappa << "\"," << endl
+			<< "  eta = \"" << m_eta << "\"," << endl
+			<< "  alpha = \"" << m_alpha << "\"," << endl
+			<< "  beta_m = \"" << m_beta_m << "\"," << endl
+			<< "  beta_n = \"" << m_beta_n << "\"," << endl
+			<< "  sigma_ca = \"" << m_sigma_ca.toString() << "\"," << endl
+			<< "  sigma_ms = \"" << m_sigma_ms.toString() << "\"," << endl
+			<< "  sigma_ma = \"" << m_sigma_ma.toString() << "\"," << endl
+			<< "  g = \"" << m_g << "\"," << endl
+			<< "  l = \"" << m_l << "\"," << endl
             << "]";
         return oss.str();
     }
@@ -387,7 +398,7 @@ private:
         std::unique_ptr<Spectrum[]> valuesTTs (new Spectrum[Resolution*Resolution]);
         std::unique_ptr<Spectrum[]> valuesTRTs(new Spectrum[Resolution*Resolution]);
 
-        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("data/fur/medulla_azimuthal.bin");
+        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("D:\\Projects\\hair\\fur2_code\\scatteringProfiles\\medulla_azimuthal.bin");
 
         // Ideally we could simply make this a constexpr, but MSVC does not support that yet (boo!)
         #define NumPoints 140

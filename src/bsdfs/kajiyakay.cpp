@@ -22,6 +22,12 @@
 
 MTS_NAMESPACE_BEGIN
 
+inline Float trigInverse(Float x)
+{
+	return std::min(std::sqrt(std::max(1.0f - x * x, 0.0f)), 1.0f);
+}
+
+
 class KajiyaKay : public BSDF {
 public:
     KajiyaKay(const Properties &props)
@@ -84,129 +90,76 @@ public:
     }
 
     Spectrum eval(const BSDFSamplingRecord &bRec, EMeasure measure) const {
-        if (Frame::cosTheta(bRec.wi) <= 0 ||
-            Frame::cosTheta(bRec.wo) <= 0 || measure != ESolidAngle)
+        if (Frame::cosTheta(bRec.wi) <= 0 || measure != ESolidAngle)
             return Spectrum(0.0f);
 
         bool hasSpecular = (bRec.typeMask & EGlossyReflection)
                 && (bRec.component == -1 || bRec.component == 0);
         bool hasDiffuse  = (bRec.typeMask & EDiffuseReflection)
                 && (bRec.component == -1 || bRec.component == 1);
+
+		auto wiworld = normalize(bRec.its.toWorld(bRec.its.wi));
+		auto woworld = normalize(bRec.its.toWorld(bRec.wo));
+
+		auto wi = bRec.its.geoFrame.toLocal(wiworld);
+		auto wo = bRec.its.geoFrame.toLocal(woworld);
+
+        auto h = (wi + wo) / 2.f;
+		//printf("wi: %.2lf,%.2lf,%.2lf\n", wi.x, wi.y, wi.z);
+		//printf("wo: %.2lf,%.2lf,%.2lf\n", wo.x, wo.y, wo.z);
 
         Spectrum result(0.0f);
         if (hasSpecular) {
-            Float alpha    = dot(bRec.wo, reflect(bRec.wi)),
-                  exponent = m_exponent->eval(bRec.its).average();
-
-            if (alpha > 0.0f) {
-                result += m_specularReflectance->eval(bRec.its) *
-                    ((exponent + 2) * INV_TWOPI * std::pow(alpha, exponent));
-            }
-        }
-
-        if (hasDiffuse)
-            result += m_diffuseReflectance->eval(bRec.its) * INV_PI;
-
-        return result * Frame::cosTheta(bRec.wo);
-    }
-
-    Float pdf(const BSDFSamplingRecord &bRec, EMeasure measure) const {
-        if (Frame::cosTheta(bRec.wi) <= 0 ||
-            Frame::cosTheta(bRec.wo) <= 0 || measure != ESolidAngle)
-            return 0.0f;
-
-        bool hasSpecular = (bRec.typeMask & EGlossyReflection)
-                && (bRec.component == -1 || bRec.component == 0);
-        bool hasDiffuse  = (bRec.typeMask & EDiffuseReflection)
-                && (bRec.component == -1 || bRec.component == 1);
-
-        Float diffuseProb = 0.0f, specProb = 0.0f;
-
-        if (hasDiffuse)
-            diffuseProb = warp::squareToCosineHemispherePdf(bRec.wo);
-
-        if (hasSpecular) {
-            Float alpha    = dot(bRec.wo, reflect(bRec.wi)),
-                  exponent = m_exponent->eval(bRec.its).average();
-            if (alpha > 0)
-                specProb = std::pow(alpha, exponent) *
-                    (exponent + 1.0f) / (2.0f * M_PI);
-        }
-
-        if (hasDiffuse && hasSpecular)
-            return m_specularSamplingWeight * specProb +
-                   (1-m_specularSamplingWeight) * diffuseProb;
-        else if (hasDiffuse)
-            return diffuseProb;
-        else if (hasSpecular)
-            return specProb;
-        else
-            return 0.0f;
-    }
-
-    inline Spectrum sample(BSDFSamplingRecord &bRec, Float &_pdf, const Point2 &_sample) const {
-        Point2 sample(_sample);
-
-        bool hasSpecular = (bRec.typeMask & EGlossyReflection)
-                && (bRec.component == -1 || bRec.component == 0);
-        bool hasDiffuse  = (bRec.typeMask & EDiffuseReflection)
-                && (bRec.component == -1 || bRec.component == 1);
-
-        if (!hasSpecular && !hasDiffuse)
-            return Spectrum(0.0f);
-
-        bool choseSpecular = hasSpecular;
-
-        if (hasDiffuse && hasSpecular) {
-            if (sample.x <= m_specularSamplingWeight) {
-                sample.x /= m_specularSamplingWeight;
-            } else {
-                sample.x = (sample.x - m_specularSamplingWeight)
-                    / (1-m_specularSamplingWeight);
-                choseSpecular = false;
-            }
-        }
-
-        if (choseSpecular) {
-            Vector R = reflect(bRec.wi);
             Float exponent = m_exponent->eval(bRec.its).average();
-
-            /* Sample from a KajiyaKay lobe centered around (0, 0, 1) */
-            Float sinAlpha = std::sqrt(1-std::pow(sample.y, 2/(exponent + 1)));
-            Float cosAlpha = std::pow(sample.y, 1/(exponent + 1));
-            Float phi = (2.0f * M_PI) * sample.x;
-            Vector localDir = Vector(
-                sinAlpha * std::cos(phi),
-                sinAlpha * std::sin(phi),
-                cosAlpha
-            );
-
-            /* Rotate into the correct coordinate system */
-            bRec.wo = Frame(R).toWorld(localDir);
-            bRec.sampledComponent = 1;
-            bRec.sampledType = EGlossyReflection;
-
-            if (Frame::cosTheta(bRec.wo) <= 0)
-                return Spectrum(0.0f);
-        } else {
-            bRec.wo = warp::squareToCosineHemisphere(sample);
-            bRec.sampledComponent = 0;
-            bRec.sampledType = EDiffuseReflection;
+			//Float cosDelta = wi.x * wo.x + trigInverse(wi.x) * trigInverse(wo.x);
+            //printf("cosDelta: %.2lf\n\n", cosDelta);
+			result += m_specularReflectance->eval(bRec.its) *
+				((exponent + 2) * INV_TWOPI * std::pow(trigInverse(h.x), exponent)) * INV_PI * INV_PI;
         }
-        bRec.eta = 1.0f;
 
-        _pdf = pdf(bRec, ESolidAngle);
+        if (hasDiffuse)
+        {
+            result += m_diffuseReflectance->eval(bRec.its) * trigInverse(wi.x) * INV_PI;
+        }
 
-        if (_pdf == 0)
-            return Spectrum(0.0f);
-        else
-            return eval(bRec, ESolidAngle) / _pdf;
+        return result * trigInverse(wo.x);
     }
 
-    Spectrum sample(BSDFSamplingRecord &bRec, const Point2 &sample) const {
-        Float pdf;
-        return KajiyaKay::sample(bRec, pdf, sample);
-    }
+	Float pdf(const BSDFSamplingRecord& bRec, EMeasure measure) const {
+		if (Frame::cosTheta(bRec.wi) <= 0 || measure != ESolidAngle)
+			return 0.0f;
+
+		bool hasSpecular = (bRec.typeMask & EGlossyReflection)
+			&& (bRec.component == -1 || bRec.component == 0);
+		bool hasDiffuse = (bRec.typeMask & EDiffuseReflection)
+			&& (bRec.component == -1 || bRec.component == 1);
+
+        if (!hasSpecular && !hasDiffuse) return 0.0f;
+
+		return warp::squareToUniformSpherePdf();
+	}
+
+	Spectrum sample(BSDFSamplingRecord& bRec, Float& pdf, const Point2& sample) const {
+		bool hasSpecular = (bRec.typeMask & EGlossyReflection)
+			&& (bRec.component == -1 || bRec.component == 0);
+		bool hasDiffuse = (bRec.typeMask & EDiffuseReflection)
+			&& (bRec.component == -1 || bRec.component == 1);
+
+		if (!hasSpecular && !hasDiffuse)
+			return Spectrum(0.0f);
+
+		bRec.wo = warp::squareToUniformSphere(sample);
+		bRec.eta = 1.0f;
+		bRec.sampledComponent = 0;
+		bRec.sampledType = EDiffuseReflection;
+		pdf = warp::squareToUniformSpherePdf();
+		return eval(bRec, ESolidAngle);
+	}
+
+	Spectrum sample(BSDFSamplingRecord& bRec, const Point2& sample) const {
+		Float pdf;
+		return KajiyaKay::sample(bRec, pdf, sample);
+	}
 
     void addChild(const std::string &name, ConfigurableObject *child) {
         if (child->getClass()->derivesFrom(MTS_CLASS(Texture))) {

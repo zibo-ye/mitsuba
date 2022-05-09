@@ -94,3 +94,7 @@ set_target_properties(yanfurrt PROPERTIES FOLDER "plugins")
 add_library(marschnerhair2 SHARED marschnerhair2.cpp)
 target_link_libraries(marschnerhair2 mitsuba-python)
 set_target_properties(marschnerhair2 PROPERTIES FOLDER "plugins")
+
+# add_library(fur2 SHARED fur2_basics.h helpers.h fur2.cpp)
+# target_link_libraries(fur2 mitsuba-python)
+# set_target_properties(fur2 PROPERTIES FOLDER "plugins")

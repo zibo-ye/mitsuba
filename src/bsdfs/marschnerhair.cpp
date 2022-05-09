@@ -39,10 +39,18 @@ class MarschnerHair : public BSDF {
 public:
     MarschnerHair(const Properties &props)
         : BSDF(props) {
-        m_a = props.getFloat("a", 1);
 		m_eta = props.getFloat("eta", 1.55);
-		m_sigma = props.getSpectrum("sigma", Spectrum(0.5f));
-		
+		//m_sigma = props.getSpectrum("sigma", Spectrum(0.5f));
+
+		Float eu[3] = { 0.419f, 0.697f, 1.37f };
+		Float ph[3] = { 0.187f, 0.4f, 1.05f };
+        const Spectrum eumelaninSigmaA = Spectrum(eu);
+		const Spectrum pheomelaninSigmaA = Spectrum(ph);
+		Float melanin_ratio = props.getFloat("melanin_ratio", 1.0f);
+		Float melanin_concentration = props.getFloat("melanin_concentration", 8.0f);
+
+        m_sigma = melanin_concentration * (eumelaninSigmaA * (1.f - melanin_ratio) + pheomelaninSigmaA * melanin_ratio);
+
         m_alpha = props.getFloat("alpha", 2.5f);
         m_alpha = degToRad(m_alpha);
         m_roughness = props.getFloat("roughness", 0.2f);
@@ -51,25 +59,13 @@ public:
         m_betaTT  = m_betaR*0.5f;
         m_betaTRT = m_betaR*2.0f;
 
-        m_vR   = m_betaR  *m_betaR;
-        m_vTT  = m_betaTT *m_betaTT;
-        m_vTRT = m_betaTRT*m_betaTRT;
-
         precomputeAzimuthalDistributions();
-
-        //sample_profile();
-
-        /*for(float i = 0.1f; i<3.0f; i = i + 0.2f){
-            std::cout<<"pre-compute: " << i  << ":" << _nR->eval(i, 0.1f).toString() << " " << 
-            _nTT->eval(i, 0.1f).toString() << " " <<
-            _nTRT->eval(i, 0.1f).toString() << std::endl;
-        }*/
+        std::cout << toString() <<endl;
     }
 
     MarschnerHair(Stream *stream, InstanceManager *manager)
         : BSDF(stream, manager) {
 
-        m_a = stream->readFloat();
 		m_eta = stream->readFloat();
 		m_sigma = Spectrum(stream);
 
@@ -130,7 +126,7 @@ public:
         Float phi = phiR - phiI;
         Spectrum result(0.0f);
 
-        return   brdf(thetaI, thetaR, phi);
+        return brdf(thetaI, thetaR, phi);
     }
 
     Float pdf(const BSDFSamplingRecord &bRec, EMeasure measure) const {
@@ -168,7 +164,6 @@ public:
     void serialize(Stream *stream, InstanceManager *manager) const {
         BSDF::serialize(stream, manager);
 
-        stream->writeFloat(m_a);
 		stream->writeFloat(m_eta);
 		m_sigma.serialize(stream);
 
@@ -179,8 +174,11 @@ public:
         std::ostringstream oss;
         oss << "Marschner Hair[" << endl
             << "  id = \"" << getID() << "\"," << endl
-            << "  sigma = \"" << m_sigma.toString() << "\"," << endl
-            << "]";
+			<< "  alpha = \"" << m_alpha << "\"," << endl
+			<< "  beta = \"" << m_betaR << "\"," << endl
+			<< "  eta = \"" << m_eta << "\"," << endl
+			<< "  sigma = \"" << m_sigma.toString() << "\"," << endl
+			<< "]";
         return oss.str();
     }
 
@@ -273,6 +271,7 @@ private:
             return std::log(I0(x));
     }
 
+    //calculate M
     std::vector<Float> M(Float sinThetaI, Float cosThetaI, Float sinThetaO, Float cosThetaO) const {
         Float alpha[3], sinThetaIp[3], cosThetaIp[3];
         alpha[0] = -2*m_alpha;
@@ -340,6 +339,8 @@ private:
 
         return (Rs*Rs + Rp*Rp)*0.5f;
     }
+
+    //Precompute LUT
     void precomputeAzimuthalDistributions()
     {
         const int Resolution = PrecomputedAzimuthalLobe::AzimuthalResolution;
@@ -441,13 +442,13 @@ private:
 
     Float m_eta;			// index of refraction
 	Spectrum m_sigma;		// absorption coefficient
-	Float m_a;				// eccentricity
-    Float m_alpha;		    // the angle that the small scales on the surface of hair are offset fromthe base cylinder, expressed in degree
+	Float m_alpha;		    // the angle that the small scales on the surface of hair are offset from the base cylinder, expressed in degree | longitudinal shift: R lobe (typ 5◦ to 10◦)
+	Float m_beta;		    // longitudinal width (stdev.): R lobe (typ 5◦ to 10◦)
     Float m_roughness;
 
     Float m_betaR, m_betaTT, m_betaTRT;
-    Float m_vR, m_vTT, m_vTRT;
-    Float _beta[3];
+	Float _alpha[3];
+	Float _beta[3];
 
     PrecomputedAzimuthalLobe* _nR;
     PrecomputedAzimuthalLobe* _nTT;
