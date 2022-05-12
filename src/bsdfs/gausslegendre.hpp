@@ -7,7 +7,7 @@
 
 MTS_NAMESPACE_BEGIN
 
-template<int N>
+template <int N>
 class GaussLegendre
 {
     std::array<float, N> _points;
@@ -28,8 +28,9 @@ class GaussLegendre
 
         double P0 = 1.0;
         double P1 = x;
-        for (int i = 2; i <= n; ++i) {
-            double Pi = ((2.0*i - 1.0)*x*P1 - (i - 1.0)*P0)/i;
+        for (int i = 2; i <= n; ++i)
+        {
+            double Pi = ((2.0 * i - 1.0) * x * P1 - (i - 1.0) * P0) / i;
             P0 = P1;
             P1 = Pi;
         }
@@ -38,20 +39,21 @@ class GaussLegendre
 
     double legendreDeriv(double x, int n)
     {
-        return n/(x*x - 1.0)*(x*legendre(x, n) - legendre(x, n - 1));
+        return n / (x * x - 1.0) * (x * legendre(x, n) - legendre(x, n - 1));
     }
 
     double kthRoot(int k)
     {
         // Initial guess due to Francesco Tricomi
         // See http://math.stackexchange.com/questions/12160/roots-of-legendre-polynomial
-        double x = std::cos(M_PI*(4.0*k - 1.0)/(4.0*N + 2.0))*
-                (1.0 - 1.0/(8.0*N*N) + 1.0/(8.0*N*N*N));
+        double x = std::cos(M_PI * (4.0 * k - 1.0) / (4.0 * N + 2.0)) *
+                   (1.0 - 1.0 / (8.0 * N * N) + 1.0 / (8.0 * N * N * N));
 
         // Newton-Raphson
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < 100; ++i)
+        {
             double f = legendre(x, N);
-            x -= f/legendreDeriv(x, N);
+            x -= f / legendreDeriv(x, N);
             if (std::abs(f) < 1e-6)
                 break;
         }
@@ -62,18 +64,19 @@ class GaussLegendre
 public:
     GaussLegendre()
     {
-        for (int i = 0; i < N; ++i) {
+        for (int i = 0; i < N; ++i)
+        {
             _points[i] = float(kthRoot(i + 1));
-            _weights[i] = float(2.0/((1.0 - math::sqr(_points[i]))*math::sqr(legendreDeriv(_points[i], N))));
+            _weights[i] = float(2.0 / ((1.0 - math::sqr(_points[i])) * math::sqr(legendreDeriv(_points[i], N))));
         }
     }
 
-    template<typename ValueType, typename F>
+    template <typename ValueType, typename F>
     inline ValueType integrate(F f)
     {
-        ValueType result = f(_points[0])*_weights[0];
+        ValueType result = f(_points[0]) * _weights[0];
         for (int i = 1; i < N; ++i)
-            result += f(_points[i])*_weights[i];
+            result += f(_points[i]) * _weights[i];
         return result;
     }
 
