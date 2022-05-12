@@ -36,12 +36,12 @@ template <> Float Pow<1>(Float v) { return v; }
 
 template <> Float Pow<0>(Float v) { return 1; }
 
-class YanFurRT : public BSDF {
+class Yan : public BSDF {
 public:
-    YanFurRT(const Properties &props)
+    Yan(const Properties &props)
         : BSDF(props) {
         m_kappa  = props.getFloat("kappa", 0.88f);
-		m_eta = props.getFloat("eta", 1.55);
+		m_eta = props.getFloat("eta", 1.55f);
 
         m_alpha = props.getFloat("alpha", 5.48f);
         m_alpha = degToRad(m_alpha);
@@ -71,20 +71,20 @@ public:
         _beta_n[1] = m_beta_n * std::sqrt(2.0);
         _beta_n[2] = m_beta_n * std::sqrt(3.0);
 
+		m_disableR = props.getBoolean("disableR", false);
+		m_disableTT = props.getBoolean("disableTT", false);
+		m_disableTRT = props.getBoolean("disableTRT", false);
+		m_disableTTs = props.getBoolean("disableTTs", false);
+		m_disableTRTs = props.getBoolean("disableTRTs", false);
+
+        cout << toString() <<endl;
+
         precomputeAzimuthalDistributions();
 
-        _ms = new PrecomputedScatterLobe("data/fur/medulla_longitudinal.bin");
-
-        sample_profile();
-
-        /*for(float i = 0.1f; i<3.0f; i = i + 0.2f){
-            std::cout<<"pre-compute: " << i  << ":" << _nR->eval(i, 0.1f).toString() << " " << 
-            _nTT->eval(i, 0.1f).toString() << " " <<
-            _nTRT->eval(i, 0.1f).toString() << std::endl;
-        }*/
+        _ms = new PrecomputedScatterLobe("D:\\Projects\\hair\\scatteringProfiles\\medulla_longitudinal.bin");
     }
 
-    YanFurRT(Stream *stream, InstanceManager *manager)
+    Yan(Stream *stream, InstanceManager *manager)
         : BSDF(stream, manager) {
 
         m_kappa = stream->readFloat();
@@ -125,18 +125,27 @@ public:
         Float thetaD = std::abs(thetaR - thetaI)*0.5f;
         Float cosThetaD = std::cos(thetaD);
 
-        auto Mp = M(thetaR, thetaI);
-        auto Np = N(Phi, cosThetaD);
+        auto MpUnscatter = M(thetaR, thetaI);
+        auto MpScatter = MScatter(thetaR, thetaI, Phi);
 
-        auto unscatter =  Mp[0] *  Np[0]
-                        + Mp[1] *   Np[1]
-                        + Mp[2] *   Np[2];
+        Spectrum unscatter(0.0f);
 
-        auto scatter = Mp[3] * (Np[3] + Np[4]);
+		if (!m_disableR) unscatter += MpUnscatter[0] * _nR->eval(Phi, cosThetaD);
+		if (!m_disableTT) unscatter += MpUnscatter[1] * _nTT->eval(Phi, cosThetaD);
+		if (!m_disableTRT) unscatter += MpUnscatter[2] * _nTRT->eval(Phi, cosThetaD);
 
+        Spectrum scatter(0.0f);
+        
+		if (!m_disableTTs) scatter += MpScatter * _nTTs->eval(Phi, cosThetaD);
+        if (!m_disableTRTs) scatter += MpScatter * _nTRTs->eval(Phi, cosThetaD);
+        
         Float cosThetaI = std::cos(thetaI);
+        //return  ( MpScatter * _nTRTs->eval(Phi, cosThetaD))/(cosThetaI*cosThetaI);
         Float cosSqrtThetaI = std::max(cosThetaI*cosThetaI, 0.1f);
-        return  (unscatter+scatter)/(cosSqrtThetaI);
+
+		return  (unscatter + scatter) / (cosSqrtThetaI);
+
+
     }
 
     Spectrum eval(const BSDFSamplingRecord &bRec, EMeasure measure=ESolidAngle) const {
@@ -176,149 +185,6 @@ public:
             color[2] = (unsigned char)(unsigned int)(0);
         }
         return color;
-    }
-
-    void sample_profile(){
-
-        int stepTheta = 256;
-        int stepPhi = 512;
-
-        Float thetaI = degToRad(-40);
-        Float thetaInterval = 40.0f/stepTheta;
-        Float phiInterval = 180.0f/stepPhi;
-
-        FILE* fp = fopen("profile_fur.ppm", "wb");
-        (void)fprintf(fp, "P6\n%d %d\n255\n", stepPhi,stepTheta);
-        for(int i = stepTheta; i >0; i--){
-            for(int j = stepPhi; j >0; j--){
-                Float thetaO = degToRad(10.0f+thetaInterval*i);
-                Float phi = degToRad(phiInterval*j);
-                Spectrum observe = brdf(thetaI, thetaO, phi);
-                Float lum = observe.getLuminance();
-                lum = math::clamp(0.0f, 1.0f, lum*10.0f);
-                auto color = remap_pseudo_color(lum);
-                fwrite(color, 1, 3, fp);
-            }
-        }
-        fclose(fp);   
-
-        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("data/fur/medulla_azimuthal.bin");
-        int step = 256;
-        Float stepInterval = 1.0f/step;
-        FILE* fp2 = fopen("profile_CN.ppm", "wb");
-        (void)fprintf(fp2, "P6\n%d %d\n255\n", step,step);
-        for(int i = step; i >0; i--){
-            for(int j = step; j >0; j--){
-                Float val = _ns->eval(_sigma_ms, stepInterval*i, m_g, stepInterval*j);
-                auto color = remap_pseudo_color(val);
-                fwrite(color, 1, 3, fp2);
-            }
-        }
-        fclose(fp2);   
-
-        Float plotCNSigmaInterval = 1.0f/8;
-        Float phiCNPlotInterval = 1.0f/100;
-        FILE* fp_cn_txt = fopen("profile_cn.txt", "w");
-        for(int j = 8; j >=0; j--){
-            for(int i = 100; i >=0; i--){
-                Float val = _ns->eval(plotCNSigmaInterval*j, 0.8f, 0.5f, phiCNPlotInterval*i);
-                fprintf(fp_cn_txt, "sigma\t%f\tphi\t%f\tval\t%f\n", 20*plotCNSigmaInterval*j,M_PI*2*phiCNPlotInterval*i, val);
-            }
-            fprintf(fp_cn_txt, "\n");
-        }
-        fclose(fp_cn_txt);   
-
-        FILE* fp3 = fopen("profile_CM.ppm", "wb");
-        (void)fprintf(fp3, "P6\n%d %d\n255\n", step,step);
-        for(int i = step; i >0; i--){
-            for(int j = step; j >0; j--){
-                Float val = _ms->eval(_sigma_ms, stepInterval*i, m_g, stepInterval*j);
-                auto color = remap_pseudo_color(val);
-                fwrite(color, 1, 3, fp3);
-            }
-        }
-        fclose(fp3);   
-
-        Float plotCMSigmaInterval = 1.0f/8;
-        Float thetaOCMPlotInterval = 1.0f/100;
-        FILE* fp_cm_txt = fopen("profile_cm.txt", "w");
-        for(int j = 8; j >=0; j--){
-            for(int i = 100; i >=0; i--){
-                Float val = _ms->eval(plotCMSigmaInterval*j, 0.2f, 0.5f, thetaOCMPlotInterval*i);
-                fprintf(fp_cm_txt, "sigma\t%f\tthetaR\t%f\tval\t%f\n", 20*plotCMSigmaInterval*j,M_PI*2*thetaOCMPlotInterval*i, val);
-            }
-            fprintf(fp_cm_txt, "\n");
-        }
-        fclose(fp_cm_txt);   
-
-        Float pi2step = 2*M_PI/step;
-        FILE* fp4 = fopen("profile_ntrt.ppm", "wb");
-        (void)fprintf(fp4, "P6\n%d %d\n255\n", step,step);
-        for(int i = step; i >0; i--){
-            for(int j = step; j >0; j--){
-                Float val = _nTRT->eval(pi2step*i, stepInterval*j).getLuminance();
-                auto color = remap_pseudo_color(val);
-                fwrite(color, 1, 3, fp4);
-            }
-        }
-        fclose(fp4);   
-
-        Float plotInterval = 1.0f/4;
-        Float phiPlotInterval = 2*M_PI/100;
-        FILE* fp_ntt_txt = fopen("profile_ntrt.txt", "w");
-        for(int j = 4; j >=0; j--){
-            for(int i = 100; i >=0; i--){
-                Float val = _nTRT->eval(phiPlotInterval*i, plotInterval*j).getLuminance();
-                fprintf(fp_ntt_txt, "Phi\t%f\tcosThetaD\t%f\tval\t%f\n", phiPlotInterval*i,plotInterval*j, val);
-            }
-            fprintf(fp_ntt_txt, "\n");
-        }
-        fclose(fp_ntt_txt);   
-
-        FILE* fp5 = fopen("profile_ntts.ppm", "wb");
-        (void)fprintf(fp5, "P6\n%d %d\n255\n", step,step);
-        for(int i = step; i >0; i--){
-            for(int j = step; j >0; j--){
-                Float val = _nTTs->eval(phiPlotInterval*i, stepInterval*j).getLuminance();
-                auto color = remap_pseudo_color(val);
-                fwrite(color, 1, 3, fp5);
-            }
-        }
-        fclose(fp5);    
-
-
-        FILE* fp_ntts_txt = fopen("profile_ntts.txt", "w");
-        for(int j = 4; j >=0; j--){
-            for(int i = 100; i >=0; i--){
-                Float val = _nTTs->eval(phiPlotInterval*i, plotInterval*j).getLuminance();
-                fprintf(fp_ntts_txt, "Phi\t%f\tcosThetaD:%f\tval\t%f\n", phiPlotInterval*i,plotInterval*j, val);
-            }
-            fprintf(fp_ntts_txt, "\n");
-        }
-        fclose(fp_ntts_txt);   
-
-        FILE* fp6 = fopen("profile_ntrts.ppm", "wb");
-        (void)fprintf(fp6, "P6\n%d %d\n255\n", step,step);
-        for(int i = step; i >0; i--){
-            for(int j = step; j >0; j--){
-                Float val = _nTRTs->eval(phiPlotInterval*i, stepInterval*j).getLuminance();
-                auto color = remap_pseudo_color(val);
-                fwrite(color, 1, 3, fp6);
-            }
-        }
-        fclose(fp6);   
-
-        FILE* fp_ntrts_txt = fopen("profile_ntrts.txt", "w");
-        for(int j = 4; j >=0; j--){
-            for(int i = 100; i >=0; i--){
-                Float val = _nTRTs->eval(phiPlotInterval*i, plotInterval*j).getLuminance();
-                fprintf(fp_ntrts_txt, "Phi\t%f\tval\t%f\n", phiPlotInterval*i,val);
-            }
-            fprintf(fp_ntrts_txt, "\n");
-        }
-        fclose(fp_ntrts_txt);   
-
-
     }
 
     Float pdf(const BSDFSamplingRecord &bRec, EMeasure measure) const {
@@ -373,9 +239,18 @@ public:
 
     std::string toString() const {
         std::ostringstream oss;
-        oss << "Marschner Hair[" << endl
+        oss << "yanfur[" << endl
             << "  id = \"" << getID() << "\"," << endl
-            << "  sigma = \"" << m_sigma_ca.toString() << "\"," << endl
+			<< "  kappa = \"" << m_kappa << "\"," << endl
+			<< "  eta = \"" << m_eta << "\"," << endl
+			<< "  alpha = \"" << m_alpha << "\"," << endl
+			<< "  beta_m = \"" << m_beta_m << "\"," << endl
+			<< "  beta_n = \"" << m_beta_n << "\"," << endl
+			<< "  sigma_ca = \"" << m_sigma_ca.toString() << "\"," << endl
+			<< "  sigma_ms = \"" << m_sigma_ms.toString() << "\"," << endl
+			<< "  sigma_ma = \"" << m_sigma_ma.toString() << "\"," << endl
+			<< "  g = \"" << m_g << "\"," << endl
+			<< "  l = \"" << m_l << "\"," << endl
             << "]";
         return oss.str();
     }
@@ -411,76 +286,16 @@ private:
         return (Rs*Rs + Rp*Rp)*0.5f;
     }
 
-    inline Float SchlickFresnel(Float eta, Float cosThetaI) const {
-        Float F0 = (1-eta)/(1+eta);
-        F0 = F0*F0;
-        return F0 + (1-F0)*std::pow((1-cosThetaI), 5);
-    }
+    Float MScatter(Float thetaO, Float thetaI, Float phi) const {
+        Float thetaO0 = M_PI_2 + thetaO;
+        Float thetaOPi = 2 * M_PI - thetaO0;
+        Float Ms0 = _ms->evalM(_sigma_ms/m_kappa, thetaI, m_g, thetaO0);
+        Float MsPi = _ms->evalM(_sigma_ms/m_kappa, thetaI, m_g, thetaOPi);
 
-    inline Float SchlickFresnelLayer(Float eta, Float cosThetaI, Float layer) const {
-        Float fresnel = SchlickFresnel(eta, cosThetaI);
-        return (fresnel * layer) / (1 + (layer-1) * fresnel);
-    }
-
-    std::vector<Spectrum> N(Float Phi, Float cosThetaD) const {
-        std::vector<Spectrum> result(5);
-
-        //dEon 14, epic 16
-        auto cosPhi = std::cos(Phi);
-        auto cosHalfPhi = std::sqrt(0.5f+0.5f*cosPhi);
-
-        //assume eta = 1.55, epic 16
-        auto n_prime = 1.19 / cosThetaD + 0.36 * cosThetaD;
-        float a = 1 / n_prime;
-        float h = cosHalfPhi * (1 + a * (0.6 - 0.8 * cosPhi));
-
-
-
-        auto Nr = 0.25f * math::clamp(std::sqrt(0.5f+0.5f*cosPhi), 0.0f, 1.0f);
-        auto Ar = SchlickFresnelLayer(m_eta, std::sqrt(0.5f+0.5f*cosThetaD), m_l);
-        result[0] = Spectrum(Nr*Ar);
-
-
-        auto sinGammaTSqr = h*h*a*a;
-        auto sm = math::safe_sqrt(m_kappa*m_kappa - sinGammaTSqr);
-        auto sc = math::safe_sqrt(1-sinGammaTSqr)-sm;
-        auto Cc = (-m_sigma_ca*4).exp();
-        auto Cma = (-m_sigma_ma*4).exp();
-        auto Cms = (-m_sigma_ms*4).exp();
-        auto Cm = Cma * Cms;
-        Spectrum Tc = Cc.pow(sc/(2*cosThetaD));
-        Spectrum Tm = Cm.pow(sm/(2*cosThetaD));
-        
-        //approximate of Dtt, epic 16
-        //float Ntt = Logistic(Phi, 0.4, 3.14);
-        float Ntt = exp(-2.6 * cosPhi - 3.1);
-        float Ftt = SchlickFresnelLayer(m_eta, cosThetaD * std::sqrt(math::clamp(1.0f - h * h,0.0f,1.0f)), m_l);
-        Ftt = (1-Ftt)*(1-Ftt);
-        result[1] = Tc * Ntt * Ftt * Tm;
-
-        //we assume h = sqrt(3)/2
-        sm = math::safe_sqrt(m_kappa*m_kappa-3.0f/4.0f);
-        sc = 1/2.0f - sm;
-        //brute force fit when beta_n = 12
-        float Ntrt = std::exp((6.3f*cosThetaD+0.7f)*cosPhi-(5*cosThetaD+2));
-        float Fhackh = SchlickFresnelLayer(m_eta, cosThetaD * 0.5f, m_l);
-        float Ftrt = Fhackh * (1-Fhackh)*(1-Fhackh);
-        Tc = Cc.pow(sc/(cosThetaD));
-        Tm = Cm.pow(sm/(cosThetaD));
-
-        result[2] = Tc * Tm * Ntrt * Ftrt;
-
-        Spectrum Atts = Cc.pow((sc+1-m_kappa)/(4*cosThetaD))*Cma.pow(m_kappa/(4*cosThetaD));
-        float Ntts = 0.05*std::cos(2*Phi) + 0.16f;
-
-        result[3] = Ntts*Atts*Fhackh;
-
-        float Ntrts = 0.08*std::cos(1.5*Phi + 1.7) + 0.18f;
-        Spectrum Atrts = Cc.pow((3*sc+1-m_kappa)/(4*cosThetaD))*Cma.pow((2*sm+m_kappa)/(4*cosThetaD))*Cms.pow(sm/(8*cosThetaD));
-
-        result[4] = Atrts * Fhackh * (1-Fhackh) * Ntrts;
-        
-        return result;
+        phi = std::abs(phi);
+        Float phiInterp = phi > M_PI ? M_PI * 2.0f - phi : phi;
+        Float interp = phiInterp / M_PI;
+        return Ms0 * (1-interp) + MsPi * interp;
     }
 
     // Standard Guassian
@@ -501,13 +316,10 @@ private:
     }
 
     std::vector<Float> M(Float thetaO, Float thetaI) const {
-        std::vector<Float> result(4);
+        std::vector<Float> result(3);
         for (int i = 0; i < 3; ++i) {
             result[i] = gaussian(thetaO, -thetaI + _alpha[i], _beta_m[i]);
         }
-
-        Float thetaO0 = M_PI_2 + thetaO;
-        result[3] = std::abs(std::sin(thetaO0))*0.5;
         return result;
     }
 
@@ -541,7 +353,7 @@ private:
         std::unique_ptr<Spectrum[]> valuesTTs (new Spectrum[Resolution*Resolution]);
         std::unique_ptr<Spectrum[]> valuesTRTs(new Spectrum[Resolution*Resolution]);
 
-        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("data/fur/medulla_azimuthal.bin");
+        PrecomputedScatterLobe* _ns = new PrecomputedScatterLobe("D:\\Projects\\hair\\scatteringProfiles\\medulla_azimuthal.bin");
 
         // Ideally we could simply make this a constexpr, but MSVC does not support that yet (boo!)
         #define NumPoints 140
@@ -597,7 +409,6 @@ private:
             for (int i = 0; i < NumPoints; ++i) {
                 auto sinGammaT = math::clamp(points[i]/iorPrime, -1.0f, 1.0f);
                 gammaTs[i] = std::asin(sinGammaT);
-                //fresnelTerms[i] = dielectricReflectanceLayers(1.0f/iorPrime, std::cos(gammaIs[i]), m_l);
                 fresnelTerms[i] = dielectricReflectanceLayers(1.0f/m_eta, cosHalfAngle*std::cos(gammaIs[i]), m_l);
                 auto sm = math::safe_sqrt(m_kappa*m_kappa - sinGammaT*sinGammaT);
                 auto sc = math::safe_sqrt(1 - sinGammaT*sinGammaT)-sm;
@@ -612,9 +423,9 @@ private:
 
                 float integralR = 0.0f;
                 Spectrum integralTT(0.0f);
-                float integralTRT(0.0f);
-                float integralTTs(0.0f);
-                float integralTRTs(0.0f);
+                Spectrum integralTRT(0.0f);
+                Spectrum integralTTs(0.0f);
+                Spectrum integralTRTs(0.0f);
 
                 // Here follows the integration across the fiber width, h.
                 // Since we were able to precompute most of the factors that
@@ -635,17 +446,17 @@ private:
 
                     integralR    += weights[i]*approxD(0, phi - Phi(gammaIs[i], gammaTs[i], 0))*AR;
                     integralTT   += weights[i]*approxD(1, phi - Phi(gammaIs[i], gammaTs[i], 1))*ATT;
-                    integralTRT  += weights[i]*approxD(2, phi - Phi(gammaIs[i], gammaTs[i], 2));//*ATRT;
+                    integralTRT  += weights[i]*approxD(2, phi - Phi(gammaIs[i], gammaTs[i], 2))*ATRT;
                     auto hPrime = math::clamp(points[i]/iorPrime, -1.0f, 1.0f); //sin gammaT
-                    integralTTs  += weights[i]*_ns->evalN(_sigma_ms/m_kappa, hPrime/m_kappa, m_g, phi - Phis(gammaIs[i], gammaTs[i], 1));//*ATTs;
-                    integralTRTs += weights[i]*_ns->evalN(_sigma_ms/m_kappa, hPrime/m_kappa, m_g, phi - Phis(gammaIs[i], gammaTs[i], 2));//*ATRTs;
+                    integralTTs  += weights[i]*_ns->evalN(_sigma_ms/m_kappa, hPrime/m_kappa, m_g, phi - Phis(gammaIs[i], gammaTs[i], 1))*ATTs;
+                    integralTRTs += weights[i]*_ns->evalN(_sigma_ms/m_kappa, hPrime/m_kappa, m_g, phi - Phis(gammaIs[i], gammaTs[i], 2))*ATRTs;
                 }
                 //std::cout<<"IntegralTT: "<<cosHalfAngle<<","<<phi<<":\t"<<integralTT.toString()<<std::endl;
                 valuesR   [phiI + y*Resolution] = Spectrum(0.5f*integralR);
                 valuesTT  [phiI + y*Resolution] = 0.5f*integralTT;
-                valuesTRT [phiI + y*Resolution] = Spectrum(0.5f*integralTRT);
-                valuesTTs [phiI + y*Resolution] = Spectrum(0.5f*integralTTs);
-                valuesTRTs[phiI + y*Resolution] = Spectrum(0.5f*integralTRTs);
+                valuesTRT [phiI + y*Resolution] = 0.5f*integralTRT;
+                valuesTTs [phiI + y*Resolution] = 0.5f*integralTTs;
+                valuesTRTs[phiI + y*Resolution] = 0.5f*integralTRTs;
             }
         }
 
@@ -669,6 +480,12 @@ private:
     Float m_beta_m;         // longitudinal roughness of cuticle
     Float m_beta_n;         // azimuthal roughness of cuticle 
 
+	bool m_disableR;
+	bool m_disableTT;
+	bool m_disableTRT;
+	bool m_disableTTs;
+	bool m_disableTRTs;
+
     Float _alpha[3], _beta_m[3], _beta_n[3];
     Float _sigma_ca, _sigma_ms, _sigma_ma;
 
@@ -682,6 +499,6 @@ private:
     //ref<Texture> m_diffuseReflectance;
 };
 
-MTS_IMPLEMENT_CLASS_S(YanFurRT, false, BSDF)
-MTS_EXPORT_PLUGIN(YanFurRT, "Yan Fur RT")
+MTS_IMPLEMENT_CLASS_S(Yan, false, BSDF)
+MTS_EXPORT_PLUGIN(Yan, "Yan's Fur Model")
 MTS_NAMESPACE_END

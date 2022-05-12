@@ -35,35 +35,39 @@ template <> Float Pow<1>(Float v) { return v; }
 
 template <> Float Pow<0>(Float v) { return 1; }
 
-class MarschnerHair : public BSDF {
+class Marschner : public BSDF {
 public:
-    MarschnerHair(const Properties &props)
+    Marschner(const Properties &props)
         : BSDF(props) {
 		m_eta = props.getFloat("eta", 1.55);
-		//m_sigma = props.getSpectrum("sigma", Spectrum(0.5f));
+		m_sigma = props.getSpectrum("sigma", Spectrum(0.5f));
 
-		Float eu[3] = { 0.419f, 0.697f, 1.37f };
-		Float ph[3] = { 0.187f, 0.4f, 1.05f };
-        const Spectrum eumelaninSigmaA = Spectrum(eu);
-		const Spectrum pheomelaninSigmaA = Spectrum(ph);
-		Float melanin_ratio = props.getFloat("melanin_ratio", 1.0f);
-		Float melanin_concentration = props.getFloat("melanin_concentration", 8.0f);
-
-        m_sigma = melanin_concentration * (eumelaninSigmaA * (1.f - melanin_ratio) + pheomelaninSigmaA * melanin_ratio);
+		//Float eu[3] = { 0.419f, 0.697f, 1.37f };
+		//Float ph[3] = { 0.187f, 0.4f, 1.05f };
+        //const Spectrum eumelaninSigmaA = Spectrum(eu);
+		//const Spectrum pheomelaninSigmaA = Spectrum(ph);
+		//Float melanin_ratio = props.getFloat("melanin_ratio", 1.0f);
+		//Float melanin_concentration = props.getFloat("melanin_concentration", 8.0f);
+        //m_sigma = melanin_concentration * (eumelaninSigmaA * (1.f - melanin_ratio) + pheomelaninSigmaA * melanin_ratio);
 
         m_alpha = props.getFloat("alpha", 2.5f);
         m_alpha = degToRad(m_alpha);
-        m_roughness = props.getFloat("roughness", 0.2f);
+		m_roughness = props.getFloat("roughness", 0.2f);
+		m_roughness = props.getFloat("roughness", 0.2f);
 
         m_betaR   = std::max(M_PI_2*m_roughness, 0.04);
         m_betaTT  = m_betaR*0.5f;
         m_betaTRT = m_betaR*2.0f;
 
+		m_disableR = props.getBoolean("disableR", false);
+		m_disableTT = props.getBoolean("disableTT", false);
+		m_disableTRT = props.getBoolean("disableTRT", false);
+
         precomputeAzimuthalDistributions();
         std::cout << toString() <<endl;
     }
 
-    MarschnerHair(Stream *stream, InstanceManager *manager)
+    Marschner(Stream *stream, InstanceManager *manager)
         : BSDF(stream, manager) {
 
 		m_eta = stream->readFloat();
@@ -102,9 +106,13 @@ public:
 
         auto Mps = M(std::sin(thetaI), std::cos(thetaI), sinThetaO, cosThetaO);
 
-        return   Mps[0] *  _nR->eval(Phi, cosThetaD)
-            +  Mps[1] * _nTT->eval(Phi, cosThetaD)
-            + Mps[2] *_nTRT->eval(Phi, cosThetaD);
+        Spectrum result(0.0f);
+
+		if (!m_disableR) result += Mps[0] * _nR->eval(Phi, cosThetaD);
+		if (!m_disableTT) result += Mps[1] * _nTT->eval(Phi, cosThetaD);
+		if (!m_disableTRT) result += Mps[2] * _nTRT->eval(Phi, cosThetaD);
+
+        return result;
 
     }
 
@@ -185,50 +193,6 @@ public:
     MTS_DECLARE_CLASS()
 
 private:
-
-    void sample_profile(){
-
-        int stepTheta = 256;
-        int stepPhi = 512;
-
-        Float thetaI = degToRad(-40);
-        Float thetaInterval = 40.0f/stepTheta;
-        Float phiInterval = 180.0f/stepPhi;
-
-        FILE* fp = fopen("profile_hair.ppm", "wb");
-        (void)fprintf(fp, "P6\n%d %d\n255\n", stepPhi,stepTheta);
-        for(int i = stepTheta; i >0; i--){
-            for(int j = stepPhi; j >0; j--){
-                Float thetaO = degToRad(10.0f+thetaInterval*i);
-                Float phi = degToRad(phiInterval*j);
-                Spectrum observe = brdf(thetaI, thetaO, phi);
-                Float lum = observe.getLuminance();
-                Float r,g,b;
-                observe.toLinearRGB(r,g,b);
-                lum = math::clamp(0.0f, 1.0f, r*0.4f);
-                static unsigned char color[3] = {0,0,0};
-                if (lum <= 0.5f)
-                {
-                    lum *= 2.0f;
-                    color[0] = (unsigned char)(unsigned int)(0);
-                    color[1] = (unsigned char)(unsigned int)(255 * (lum) + 0.5f);
-                    color[2] = (unsigned char)(unsigned int)(255 * (1.0f - lum) + 0.5f);
-                }
-                else
-                {
-                    lum = lum * 2.0f - 1.0f;
-                    color[0] = (unsigned char)(unsigned int)(255 * (lum) + 0.5f);
-                    color[1] = (unsigned char)(unsigned int)(255 * (1.0f - lum) + 0.5f);
-                    color[2] = (unsigned char)(unsigned int)(0);
-                }
-                fwrite(color, 1, 3, fp);
-            }
-        }
-        fclose(fp);   
-
-        std::cout<<"Write Profile"<<std::endl;
-    }
-
     float sampleM(float v, float sinThetaI, float cosThetaI, float xi1, float xi2) const
     {
         // Version from the paper (very unstable)
@@ -446,6 +410,10 @@ private:
 	Float m_beta;		    // longitudinal width (stdev.): R lobe (typ 5◦ to 10◦)
     Float m_roughness;
 
+	bool m_disableR;
+	bool m_disableTT;
+	bool m_disableTRT;
+
     Float m_betaR, m_betaTT, m_betaTRT;
 	Float _alpha[3];
 	Float _beta[3];
@@ -457,6 +425,6 @@ private:
     //ref<Texture> m_diffuseReflectance;
 };
 
-MTS_IMPLEMENT_CLASS_S(MarschnerHair, false, BSDF)
-MTS_EXPORT_PLUGIN(MarschnerHair, "Marschner Hair")
+MTS_IMPLEMENT_CLASS_S(Marschner, false, BSDF)
+MTS_EXPORT_PLUGIN(Marschner, "Marschner's Hair Model")
 MTS_NAMESPACE_END

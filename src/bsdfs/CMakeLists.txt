@@ -79,22 +79,10 @@ add_library(kajiyakay SHARED kajiyakay.cpp)
 target_link_libraries(kajiyakay mitsuba-python)
 set_target_properties(kajiyakay PROPERTIES FOLDER "plugins")
 
-add_library(marschnerhair SHARED marschnerhair.cpp)
-target_link_libraries(marschnerhair mitsuba-python)
-set_target_properties(marschnerhair PROPERTIES FOLDER "plugins")
+add_library(marschner SHARED marschner.cpp)
+target_link_libraries(marschner mitsuba-python)
+set_target_properties(marschner PROPERTIES FOLDER "plugins")
 
-add_library(yanfur SHARED yanfur.cpp)
-target_link_libraries(yanfur mitsuba-python)
-set_target_properties(yanfur PROPERTIES FOLDER "plugins")
-
-add_library(yanfurrt SHARED yanfurrt.cpp)
-target_link_libraries(yanfurrt mitsuba-python)
-set_target_properties(yanfurrt PROPERTIES FOLDER "plugins")
-
-add_library(marschnerhair2 SHARED marschnerhair2.cpp)
-target_link_libraries(marschnerhair2 mitsuba-python)
-set_target_properties(marschnerhair2 PROPERTIES FOLDER "plugins")
-
-# add_library(fur2 SHARED fur2_basics.h helpers.h fur2.cpp)
-# target_link_libraries(fur2 mitsuba-python)
-# set_target_properties(fur2 PROPERTIES FOLDER "plugins")
+add_library(yan SHARED yan.cpp)
+target_link_libraries(yan mitsuba-python)
+set_target_properties(yan PROPERTIES FOLDER "plugins")
